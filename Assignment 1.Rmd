@@ -1,0 +1,36 @@
+---
+title: "Assignment 1"
+author: "Jason Givens-Doyle"
+date: "September 1, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+###Assignment:
+Fixing the column names and then renaming the elements in four of the columns.
+
+
+```{r}
+##Loading file:
+mush<-read.table("https://archive.ics.uci.edu/ml/machine-learning-databases/mushroom/agaricus-lepiota.data",header = FALSE,sep = ",")
+###renaming columns
+colnames(mush)<-c("edibility","cap-shape","cap-surface","cap-color","bruises","odor","gill-attachment","gill-spacing","gill-size","gill-color","stalk-shape","stalk-root","stalk-surface-above-ring","stalk-surface-below-ring","stalk-color-above-ring","stalk-color-below-ring","veil-type","veil-color","ring-number","ring-type","spore-print-color","population","habitat")
+#setting the columns as ordered factors so that I can then rename them without turning everything into strings
+#I don't feel like ordering all 23 columns, writing a function to do it for me
+orderme <- function(factcol){
+  factcol<-factor(factcol, levels(factcol),ordered=TRUE)
+  return(factcol)
+}
+##there's probably a neater and faster way to do this, but this works
+for (i in 1:23) {
+  mush[,i]<-orderme(mush[,i])
+}
+levels(mush$edibility)<-c("edible","poisonous")
+levels(mush$`cap-shape`)<-c("bell","conical","flat","knobbed","sunken","convex")
+levels(mush$`cap-surface`)<-c("fiborous","grooves","smooth","scaly")
+levels(mush$odor)<-c("almond","creosote","foul","anise","musty","none","pungent","spicy","fishy")
+summary(mush)
+```
