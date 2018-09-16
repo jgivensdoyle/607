@@ -1,0 +1,94 @@
+---
+title: "Data 607 Assignment 3"
+author: "Jason Givens-Doyle"
+date: "September 15, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(gdata)
+```
+
+##Problem 3
+###Setup:
+```{r}
+library(stringr)
+
+raw.data <- "555-1239Moe Szyslak(636) 555-0113Burns, C. Montgomery555-6542Rev. Timothy Lovejoy555 8904Ned Flanders636-555-3226Simpson,Homer5553642Dr. Julius Hibbert"
+name <- unlist(str_extract_all(raw.data, "[[:alpha:]., ]{2,}"))
+
+```
+###Part 1:
+```{r}
+othellor<-function(x){ ###this puts things into the standard firstname lastname
+  if (str_detect(x,",")){
+    x<-unlist(str_split(x,","))
+    tmp<-x[1]
+    x[1]<-x[2]
+    x[2]<-tmp
+    x<-paste(x[1],x[2])
+  }
+return(x)  
+}
+name2<-name
+
+##lapply is giving me real weirdness so I used a loop
+for(i in 1:6){
+  name2[i]<-othellor(name[i])
+}
+name2<-trim(name2) #there's a space floating around in front of the C, getting rid of it, I used gdata, but there were warnings, so I put echo=FALSE on it
+name2
+```
+
+###Part 2:
+
+```{r}
+titles<-"[a-z]+\\."
+str_detect(name,titles)
+```
+
+###Part 3:
+```{r}
+twoname<-"[A-Z]\\."
+str_detect(name,twoname)
+```
+
+##Problem 4:
+
+```{r}
+cash<-"[0-9]+\\$"
+#numbers followed by dollar sign, eg. 123$
+str_detect("123$",cash)
+
+shortname<-"\\b[a-z]{1,4}\\b"
+#at least one lowercase letter but no more than 4: "a" is ok, so is "azde", but "azdef" is not
+str_detect("azde",shortname)
+str_detect("azdef",shortname)
+
+textdoc<-".*?\\.txt$"
+#any string that ends in ".txt" eg. "misslucyhadasteamboat.txt"
+str_detect("misslucyhadasteamboat.txt",textdoc)
+
+crazydate<-"\\d{2}/\\d{2}/\\d{4}"
+#anything in the form of a standard American date, however the numbers do not have to corespond to real month and day numbers, so "33/44/0304" works
+str_detect("33/44/0304",crazydate)
+
+tags<-"<(.+?)>.+?</\\1>"
+#this detects opening and closing URL tags like "<em>emphasis</em>"  The opening and closing tags must be the same, it cannot handle a linking tag like <a href=""></a>  To do that, we can use the expression "<(.+?)\\s{0,1}.*?>.+?</\\1>" which can handle links and normal tags
+str_detect("<em>emphasis</em>",tags)
+##now showing the improved version:
+supertags<-"<(.+?)\\s{0,1}.*?>.+?</\\1>"
+str_detect("<em>emphasis</em>",supertags)
+str_detect('<a href="https://www.google.com">Google</a>',supertags)
+```
+
+##Problem 9
+```{r}
+secret<-"clcopCow1zmstc0d87wnkig7OvdicpNuggvhryn92Gjuwczi8hqrfpRxs5Aj5dwpn0TanwoUwisdij7Lj8kpf03AT5Idr3coc0bt7yczjatOaootj55t3Nj3ne6c4Sfek.r1w1YwwojigOd6vrfUrbz2.2bkAnbhzgv4R9i05zEcrop.wAgnb.SqoU65fPa1otfb7wEm24k6t3sR9zqe5fy89n6Nd5t9kc4fE905gmc4Rgxo5nhDk!gr"
+sec2<-gsub("\\d","",secret)
+sec3<-gsub("[a-z]","",sec2)  #now getting the formatting right
+sec4<-sub("\\.","! ",sec3)
+sec5<-gsub("\\."," ",sec4)
+sec5
+```
