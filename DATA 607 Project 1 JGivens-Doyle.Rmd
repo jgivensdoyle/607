@@ -1,0 +1,97 @@
+---
+title: "DATA 607 Project 1"
+author: "Jason Givens-Doyle"
+date: "September 20, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, include=FALSE}
+#loading the packages used, silenced because gdata likes spitting out lots of warnings - it doesn't like that perl isn't in my PATH enviroment
+library(stringr)
+library(gdata)
+library(dplyr)
+library(magrittr)
+```
+```
+#These are the packages used, placed in a fake code environment because gdata complains about perl not being in my PATH file and that takes up a full screen worth of space
+library(stringr)
+library(gdata)
+library(dplyr)
+library(magrittr)
+```
+First loading the csv into a character vector.
+```{r}
+#ignore the warning, I have been running this off the .txt file from the course site, I am not sure why it is giving it to me
+results<-readLines("tournamentinfo.txt")
+```
+Then parsing out the top and bottom lines of each competitor.  Starting with line 5 since the rows before that have no useful data.
+```{r}
+player.raw<-t(c(1:12)) 
+player.raw<-as.data.frame(player.raw) #added later, once I got errors indicating that R was still treating player.raw as a vector
+numbfind<-"[0-9]+\\.{0,1}[0-9]*" #looks for at least one number with at most one decimal point and perhaps some numbers after the decimal
+charfind<-"[A-Z]+" #doesn't need to be more complex, as the competitor names are parsed out against the |, so we only need to worry about states.  This could probably have been "[A-Z]{2}", but this works, so I'm not changing it (Maxim 43)
+names(player.raw)=c("ID","Name","Points","op1","op2","op3","op4","op5","op6","op7","State","Rank")
+for(i in 5:length(results)){
+  if(mod(i,3)==2){
+    #dumps all the numbers in and then adds the name.  We'll rewrite over the 11th entry in the next iteration 
+    topsplit<-str_split(results[i],"\\|") #splitting the row into 10 different strings so we can work with each one
+    player.raw[i,]<-rbind(unlist(sapply(topsplit, FUN = function(x) str_match(x,numbfind))),NA) #binding the NA so that there are 12 columns, otherwise get an error
+    player.raw[i,2]<-trim(unlist(topsplit)[2]) #name, needed because the rest is dumped as numbers
+  }else if(mod(i,3)==0){ 
+    #this is the second line for the player, remember to use i- for all the player.raw[row] things
+    player.raw[i-1,11]<-str_match(results[i],charfind) #getting the state
+    player.raw[i-1,12]<-as.numeric(unlist(str_match_all(unlist(str_split(results[i],"P")),numbfind)))[2] #this one is the pre-tournament rank, the interior str_split against P is to remove the xPy provisional rankings and just get the x
+  }
+  ##else not needed, don't need the remaining line
+}
+```
+Now for some cleanup, given that player.raw is 195 lines, most of them full of NA
+```{r}
+#player.raw is now a 195 line data.frame with a ton of NA lines. Need to get rid of them
+player.rev<-player.raw[complete.cases(player.raw[,1]),]
+#player.rev now is almost there. Want to get rid of initialization line
+player.rev<-player.rev[2:nrow(player.rev),]
+```
+Now creating two functions to replace the opponent's number with the opponent's rating.
+```{r}
+rankreplacer<-function(x,df){ #x is the player number, df is the dataframe
+  a<-as.numeric(df[x,12])
+  return(a)
+}
+#well, that feels unnecessary, although this allows for a sapply
+rowrankreplacer<-function(y,df){#this one goes through an entire row and does the rank replacement
+  a<-as.numeric(unlist(sapply(as.numeric(df[y,4:10]), FUN = function(x) rankreplacer(x,df))))
+  return(a)
+}##for some reason, this kept reverting to strings at various points, thus the double as.numeric.  Still ran into trouble later, even with this.  They're kept as strings from the original str_split and it seems that they want to stay that way
+```
+I was unable to get sapply, vapply or apply to do the rowrankreplacer against each row and move down one, so there is one more loop:
+```{r}
+player.finalrev<-player.rev
+#I feel like there should be some way to do an apply or lapply or vapply to do this, but there doesn't seem to be one, similarly, rowwise doesn't seem to want to cooperate either
+for(i in 1:64){
+  player.finalrev[i,4:10]<-rowrankreplacer(i,player.rev)
+}
+```
+Now creating a final column with the average of opponents ratings.  
+```{r}
+player.finalrev%<>%rowwise%>%mutate(aveop=mean(as.numeric(c(op1,op2,op3,op4,op5,op6,op7)),na.rm = TRUE)) #so much neater and more R-like
+```
+Finally, creating the table that is written to the csv and writing it to the csv.
+```{r}
+player.table<-player.finalrev[,1:5]#easiest way to get the right number of rows so I don't get even more warnings
+names(player.table)=c("Player Name","State","Score","Pre-Rating","Average Opponent Rating")
+player.table[,1]<-player.finalrev[,2]
+player.table[,2]<-player.finalrev[,11]
+player.table[,3]<-player.finalrev[,3]
+player.table[,4]<-player.finalrev[,12]
+player.table[,5]<-player.finalrev[,13]
+write.csv(player.table,"Project 1 Table.csv")
+```
+Finally, in case the reader doesn't want to run all the code, the table:
+```{r}
+player.table
+```
