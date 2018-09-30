@@ -1,0 +1,65 @@
+---
+title: "DATA 607 Week 5 Homework"
+author: "Jason Givens-Doyle"
+date: "September 29, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(width = 80)
+library(dplyr)
+library(tidyr)
+```
+
+To create the CSV I manually entered the information contained in the image into a google sheets file and downloaded it as a .csv.  I start by reading in the .csv file
+
+```{r}
+airline2<-read.csv("CSV for HW 5 - Sheet1.csv", stringsAsFactors = FALSE)
+airline2[2,1]<-airline2[1,1]#inserting duplicate values so that I can use gather without a problem
+airline2[5,1]<-airline2[4,1]
+airline2
+```
+
+In order to get this into a tidy format, I need to first melt (or gather) the data.frame and then spread one of the colums.  Gather nicely takes care of row 3 with the blanks and NAs if I use the na.rm option.  I also took the time to fix the name of two columns, one that had X as the tile and the other that had a space in it, making it harder to work with.
+
+```{r}
+AirPartTidy<-gather(airline2,city,number_of_flights,c(3:7), na.rm = TRUE) #melting it all together
+AirTidy<-spread(AirPartTidy,X.1,number_of_flights) #spreading out the on time/delayed part into two columns for easy use
+names(AirTidy)[1]<-"Airline" #fixing column names
+names(AirTidy)[4]<-"On_Time"
+```
+
+For the analysis, I first created two vectors, one tracking the percentage of flights that were on time, the other tracking delays, both by location and airline.  I then attached them to the AirTidy data.frame.
+
+```{r}
+On_Time_Percentage<-(AirTidy$On_Time/(AirTidy$delayed+AirTidy$On_Time))  
+Delay_Percentage<-1-On_Time_Percentage
+AirTidy<-cbind(AirTidy,On_Time_Percentage)
+AirTidy<-cbind(AirTidy,Delay_Percentage)
+AirTidy
+```
+
+The assignment asked us to compare the delay and on time rates of both airlines.  I created two arrays that give that information.  The percentage of delayed flights plus the percentage of on time flights will equal 100%, so I used that to calculate delay percentages.
+
+```{r}
+TotalOnTime<-with(AirTidy, tapply(On_Time,Airline,sum)) #creating totals of on time and delayed for each airline to compare them
+TotalDelayed<-with(AirTidy, tapply(delayed,Airline,sum))
+OverallOTPercent<-TotalOnTime/(TotalDelayed+TotalOnTime)
+OverallDPercent<-1-OverallOTPercent
+OverallOTPercent
+OverallDPercent
+```
+
+The data here is quite interesting, as we have a case of Simpson's Paradox.  For each location, Alaska has a lower delay percentage.  However, overall, AM West has a lower delay percentage.  The reasoning for this can be seen when we look at the city based delay percentages.
+
+```{r}
+CitiesOnTime<-with(AirTidy, tapply(On_Time,city,sum)) #creating totals for cities instead of airlines
+CitiesDelayed<-with(AirTidy, tapply(delayed,city,sum))
+CitiesOTPercent<-CitiesOnTime/(CitiesDelayed+CitiesOnTime)
+CitiesOTPercent
+CitiesDPercent<-1-CitiesOTPercent
+CitiesDPercent
+```
+
+Phoenix has a fantastically low delay percentage, while San Francisco and Seattle have much higher delay percentages.  AM West flies a more planes out of Phoenix than all of Alaska's locations combined.  Alaska's main hub is Seattle, which has only a marginally better on time percentage than San Francisco.  Despite AM West having a lower overall delay percentage, the data indicates that a flier is better off taking Alaska over AM West.
