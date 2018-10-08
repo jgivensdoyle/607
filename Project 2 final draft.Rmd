@@ -1,0 +1,291 @@
+---
+title: "DATA 607 Project 2"
+author: "Jason Givens-Doyle"
+date: "October 6, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r, message=FALSE, warning=FALSE}
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(magrittr)
+```
+
+
+For project 2, I chose to work with the New York Health Department Restaraunt Data, The Doctor Who Time Travel Data, and the UN Migrant Stock Data. 
+
+###New York Department of Health and Mental Hygeine Restaurant Data
+
+1.)  For the New York Health Department Restaraunt data, I was asked to find the most common violations that shut down restaurants, how likely they are to be reopened if they are shut down and which zip codes have the most violations.  I chose to tackle the data by looking at the classes of critical problems (mice, roaches, improper food storage temperature, things that could immediately harm someone's health) that cause shut downs vs. non-critical problems (food storage surfaces having defects, openings that could allow in vermin, things that are not immediately hazardous, but could be so).
+
+Given the number of restaraunts in New York, I worked with an approximately 6 month window.
+
+The data is already quite tall, so instead of making it narrower, I instead widened it out with tidyr.  
+
+(There were some characters that R read as end of file characters that I had to edit out with a text editor, thus the file name.)
+
+```{R}
+NTCdata<-read.csv("DOHMH_New_York_City_Restaurant_Inspection_Resultsfixed.csv")
+```
+
+There are three classes of violations in terms of whether or not they were critical.  Those are critical, non-critical and not applicable.  I eliminated the not applicable ones, as they were things like customers smoking, that were not actually relevant to food safety.
+
+```{r}
+NTCApplicable<-NTCdata[!str_detect(NTCdata$CRITICAL.FLAG,"Applicable"),]
+```
+
+I then spread out the data by dividing those with the critical flag.  This is making it slightly less tidy, but it allows a quick separation of critical and non-critical violations.
+
+```{r}
+NTCwide<-spread(NTCApplicable,CRITICAL.FLAG,VIOLATION.DESCRIPTION)
+critical<-NTCwide[!is.na(NTCwide$Critical),]
+noncritical<-NTCwide[is.na(NTCwide$Critical),]
+```
+
+Having done this, I can now look at the closures for both critical and non-critical violations.  
+
+```{r}
+critclose<-critical[str_detect(critical$ACTION,"closed")|str_detect(critical$ACTION,"Closed"),]
+summary(critclose)
+noncritclose<-noncritical[str_detect(noncritical$ACTION,"closed")|str_detect(noncritical$ACTION,"Closed"),]
+summary(noncritclose)
+```
+
+The top critical closure reasons are mice and temperature control problems.  The top non-critical reasons are not being vermin proof, bad food storage, and plumbing problems, including not having drains in the floor.
+
+To look at which restaurants were closed and reopened, I subsetted the critical and non-critical data sets by those that the health department reopened and then did an inner join to see which ones had been closed during this time period.  Oddly enough, it seems that there are more results for these than there were initial elements, this indicates that restaurants are being closed and re-opened more than once.
+
+```{r}
+noncritreopen<-noncritical[str_detect(noncritical$ACTION,"re-open"),]
+noncritcloseandreopen<-inner_join(noncritclose,noncritreopen,by = "CAMIS")
+critreopen<-critical[str_detect(critical$ACTION,"re-open"),]
+critclosereopen<-inner_join(critclose,critreopen,by="CAMIS")
+nrow(noncritclose)
+nrow(noncritcloseandreopen)
+nrow(critclose)
+nrow(critclosereopen)
+```
+
+In order to look only on the restaurant basis, no matter if they had multiple closures, I used the distinct() function.
+
+```{r}
+NCCU<-distinct(noncritclose,CAMIS)
+NCCRU<-distinct(noncritcloseandreopen,CAMIS)
+nrow(NCCRU)/nrow(NCCU)
+CCU<-distinct(critclose,CAMIS)
+CCRU<-distinct(critclosereopen,CAMIS)
+nrow(CCRU)/nrow(CCU)
+```
+
+This shows that restaurants that are shut down for critical issues are much less likely to reopen in the six month window than ones that are shut down for non-critical reasons.  Apparently, once you have mice or cockroaches, it's hard to come back from that.
+
+Finally, I checked to see which zip codes had the most health code violations.
+
+```{r}
+zips<-as.factor(NTCdata$ZIPCODE)
+summary(zips)
+```
+
+This is not surprising, as the top two zip codes have some of the highest number of restaraunts in New York City, even if I am slightly disturbed, given that I used to work in 10019.
+
+If instead we want to look at which zip codes get proportionally the most health code violations, we can use
+
+```{r}
+numviol<-count(NTCdata,ZIPCODE)
+RestUnique<-distinct(NTCdata,CAMIS,.keep_all = TRUE)
+numrest<-count(RestUnique,ZIPCODE)
+violratio<-cbind(numviol[,1],numviol[,2]%/%numrest[,2])
+head(violratio[order(-violratio$n),],8)
+```
+
+The zip codes 10032, 10040 and 10111 have the highest ratio of violations to restaurants.  
+
+###Docto Who Data
+
+2.) I was asked to see whether the old series or the new one had more time traveling and which Doctor traveled the most.
+
+More of the work with this data set is in cleaning rather than tidying.  There is also a typo present that I did not bother to correct, both because I wanted to work with the initial data set and second because it did not alter the resutls.  One of the Doctors is recorded as going back to -400000000000, which is before the beginning of the universe.  It was meant to be -4000000000, the beginning of life on earth, but the person writing this up slipped when entering 0s.  
+The initial data cleaning:
+
+```{r}
+TheDoctor<-read.csv("DrWhoTimeTravel.csv",stringsAsFactors = FALSE)
+TheDoctor<-select(TheDoctor,Doctor.Who.season:location)
+TheDoctor<-TheDoctor[,c(1:5,7,6,8:11)]
+TheDoctor[,1]<-as.numeric(TheDoctor[,1])
+TheDoctor<-TheDoctor[!is.na(TheDoctor[,1]),]
+TheDoctor[,6]<-as.numeric(gsub(",","",TheDoctor[,6]))
+head(TheDoctor)
+```
+
+Now, I can gather up the starts and ends for the various Doctors to see when they started and ended.  I first did this with the non-estimated data.
+
+```{r}
+
+NDoctor<-gather(TheDoctor,Extremes,Years,5:6)
+head(NDoctor)
+
+NDoctor$Doctor.Who.season<-as.numeric(NDoctor$Doctor.Who.season)
+OldWho<-NDoctor[NDoctor$Doctor.Who.season<9,]
+NuWho<-NDoctor[NDoctor$Doctor.Who.season>8,]
+GroupNuWho<-group_by(NuWho,Doctor.Who.season) #need to know about this in terms of both doctor and in terms of old vs nu
+GroupOldWho<-group_by(OldWho,Doctor.Who.season)
+
+summarise(GroupNuWho,total.years=abs(min(Years))+abs(max(Years)))
+summarise(GroupOldWho,total.years=abs(min(Years))+abs(max(Years)))
+```
+
+To include the estimations, I simply broadened the gather to include column 7.  With the estimations, we have
+
+```{r}
+NEDoctor<-gather(TheDoctor,Extremes,Years,5:7)
+head(NEDoctor)
+NEDoctor<-NEDoctor[!is.na(NEDoctor$Years),]
+OldEWho<-NEDoctor[NEDoctor$Doctor.Who.season<9,]
+NuEWho<-NEDoctor[NEDoctor$Doctor.Who.season>8,]
+GroupNuEWho<-group_by(NuEWho,Doctor.Who.season) #need to know about this in terms of both doctor and in terms of old vs nu
+GroupOldEWho<-group_by(OldEWho,Doctor.Who.season)
+summarise(GroupNuEWho,total.years=abs(max(Years))-(min(Years)))
+summarise(GroupOldEWho,total.years=abs(max(Years))-(min(Years)))
+conciseNuEWho<-summarise(GroupNuEWho,total.years=abs(min(Years))+abs(max(Years)))
+conciseOldEWho<-summarise(GroupOldEWho,total.years=abs(min(Years))+abs(max(Years)))
+mean(conciseNuEWho$total.years)
+mean(conciseOldEWho$total.years)
+```
+
+With both the estimations and without them, the 10th Doctor traveled the most and the 8th traveled the least.  This is not surprising, as the 10th Doctor has an episode where he goes 100 trillion years into the future and the 8th Doctor was only in a TV movie that involved not much time travel.
+
+Similarly, we can see that, mostly because of the orders of magnitude more travels of the 10th Doctor, the new series has more years covered than the old.
+
+###UN Migrant Stock Data
+
+3.)For this data set, I was asked to examine trends in migrant movement over the last 25 years.  I interpretted this as seeing which countries had the most migrants, which had the greatest change in migrants and which had the greates percentage change in migrants.
+
+I start by loading in the xlsx turned csv file from row 16 down, as the fancy formatting of the Excel document takes 15 lines.  This does have the downside of missing out on the sex differentiation labels, which I address with some string substitution and regex work.  Also, as noted in the comments, the labels for the first 5 columns were on row 15, so I relabled the rows at this time.
+
+```{r}
+Migrants<-read.csv("UN_MigrantStockTotal_2015 - Table 1.csv",skip=16,stringsAsFactors = FALSE)#skipping to the row with the year identifiers, .1 means male, .2 means female, will need to melt/gather for this
+names(Migrants)[1:5]<-c("sort.order","major.area,region,country.or.area.of.destination","notes","country.code","type.of.data.(a)") #these names appear in the line above the years, thus renaming the columns
+head(Migrants)
+```
+
+We can see that the numbers are written as groups of three digits with spaces separating them.  While this looks good in Excel and is removed when working there, a shift through Google docs to get a tab of the Excel file renders them into the .csv file.  We have to deal with them if we want any useable data.
+
+```{r warning=FALSE}
+GMig<-apply(Migrants[,6:23],MARGIN = c(1,2),FUN = function(x) gsub("\\s","",x)) #each 3 number block has a space in front of it, need to get rid of those
+Migrants[,6:23]<-GMig #that works, but it only gives me columns 6:23.  Need to put this all together
+NMig<-apply(Migrants[,6:23],MARGIN = c(1,2),FUN = function(x) as.numeric(x)) #what GMig produced were all character strings.  They really are numbers, fixing that.  I'm going to have to do this again after gathering, so this may be extra.  I wish I could just do Migrants[,6:23], but R gets really annoyed at passing a vector into the as.numeric function
+Migrants[,6:23]<-NMig
+```
+
+I then made the data set tall by moving years into a single columns.
+
+```{r}
+MigrantsSkinny<-gather(Migrants,Year.and.Sex,number.of.migrants,6:23,na.rm = TRUE) #the NAs come from countries like South Sudan or East Timor that didn't exist in 1990 or 1995
+MigrantsSkinnySpecific<-MigrantsSkinny
+```
+
+As I said above, I needed to now differentiate between the men, women and combined values.  Given that the combined values were simply in the format of X<year>, I had to use their length to do this for the combined ones. I found it best to write a simple function to use in the lapply command.
+
+```{r}
+
+addcombine<- function(x){
+  y<-ifelse(regexpr("$",x)[1]==6,paste(x,".combined",sep=""),x)
+  return(y)
+}
+
+MigrantsSkinnySpecific$Year.and.Sex<-lapply(MigrantsSkinnySpecific$Year.and.Sex,FUN = function(x) addcombine(x)) 
+MigrantsSkinnySpecific$Year.and.Sex<-str_replace(MigrantsSkinnySpecific$Year.and.Sex,"\\.1",".male")
+MigrantsSkinnySpecific$Year.and.Sex<-str_replace(MigrantsSkinnySpecific$Year.and.Sex,"\\.2",".female")
+```
+
+We can now finally separate the year from the sexes of the migrants.  As noted, the parenthese in the column name throw things off.  Having unsuitable characters in column names is an issue I deal with repeatedly after this.
+
+```{r}
+MigrantsSpecific<-separate(MigrantsSkinnySpecific,Year.and.Sex,into = c("Year","Sex"),sep="\\.")
+MigrantsTidy<-MigrantsSpecific[,c(2,5:8)]
+names(MigrantsTidy)[2]<-"type.of.data" #the (a) throws everything off
+```
+
+Also, the data is both on the country and region scale.  To judge things by countries, I removed the regions.  
+
+```{r}
+MigrantsCountriesOnly<-subset(MigrantsTidy,grepl("[A-Z]+",type.of.data))
+names(MigrantsCountriesOnly)[1]<-"country"
+```
+
+To see which country overall took in the most migrants, be they temporary or permanent, we can use the summarize command.  This will double the actual number, but because we are looking for the largest number, this will not change the result.
+
+```{r}
+MigrantsCountriesOnly<-group_by(MigrantsCountriesOnly,country)
+totalmigrants<-summarise(MigrantsCountriesOnly,sum(number.of.migrants))
+names(totalmigrants)[2]<-"total.number.of.migrants"
+totalmigrants[which.max(totalmigrants$total.number.of.migrants),]
+```
+
+Similarly, I check to see which country had the largest absolute change in number of migrants over the last 25 years.
+
+```{r}
+biggestchange<-summarise(MigrantsCountriesOnly,max(number.of.migrants)-min(number.of.migrants))
+names(biggestchange)[2]<-"difference"
+biggestchange[biggestchange$difference==max(biggestchange$difference),] #which.max was not happy, thus the kludge
+```
+
+In both cases it is the US.  Given that the US maintains its population growth with immigrants, combined with workers coming over here to send money back home, students going to college/graduate school, a small number of refugees, and other immigrants, this is unsurprising.
+
+I also wanted to see what the case was percentage wise.  I started with the combined sexes numbers and looked first at total migrants vs. 1990 levels and then 2015 migrants vs. 1990 numbers.
+
+```{r}
+X1990<-MigrantsCountriesOnly[MigrantsCountriesOnly$Year=="X1990"&MigrantsCountriesOnly$Sex=="combined",]
+bigper<-inner_join(biggestchange,X1990,by="country")
+bigper%<>%mutate(difference/number.of.migrants)
+names(bigper)[7]<-"percentage"
+bigper[bigper$percentage==max(bigper$percentage),]
+bigper[bigper$percentage==max(bigper$percentage),1]
+#the Republic of Korea has seen the most imigrants in total vs. 1990
+X2015<-MigrantsCountriesOnly[MigrantsCountriesOnly$Year=="X2015"&MigrantsCountriesOnly$Sex=="combined",]
+miniper<-inner_join(X2015,X1990,by="country")
+miniper%<>%mutate(number.of.migrants.x/number.of.migrants.y)
+names(miniper)[10]<-"percentage"
+miniper[miniper$percentage==max(miniper$percentage),]
+miniper[miniper$percentage==max(miniper$percentage),1]
+```
+
+In both cases, it was the Republic of Korea.  This makes sense, as South Korea became a democracy only in 1987 and really began to take off economically after that.
+
+I finally wanted to know if the change in migrant women was also largest in the Republic of Korea, or if it was in another country.
+
+```{r}
+X1990F<-MigrantsCountriesOnly[MigrantsCountriesOnly$Year=="X1990"&MigrantsCountriesOnly$Sex=="female",]
+X2015F<-MigrantsCountriesOnly[MigrantsCountriesOnly$Year=="X2015"&MigrantsCountriesOnly$Sex=="female",]
+miniperF<-inner_join(X2015F,X1990F,by="country")
+miniperF%<>%mutate(number.of.migrants.x/number.of.migrants.y)
+names(miniperF)[10]<-"percentage"
+miniperF[miniperF$percentage==max(miniperF$percentage),]
+```
+
+I had thought that it was mostly men who were moving and visiting long term to South Korea.  Women did so in just about the same percentages.
+
+I also checked to see which country has simply been receiving the same number of migrants over the last 25 years.
+
+```{r}
+miniper%<>%mutate(abs(1-percentage))
+names(miniper)[11]<-"close.to.constant"
+head(miniper)
+min(miniper$close.to.constant)
+miniper[miniper$close.to.constant==min(miniper$close.to.constant),]
+#miniper[miniper$]
+```
+
+Apparently Costa Rica gets about 400,000 migrants annually, no matter what.
+
+Finally, I wanted to see which country had the greatest percentage drop in migrants.  Where are people not going anymore?
+
+```{r}
+miniper[miniper$percentage==min(miniper$percentage),]
+```
+
+Given the civil war in Somalia started in 1991 and has not entirely ceased, this is unsurprising.  
