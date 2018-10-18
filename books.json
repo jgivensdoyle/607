@@ -1,0 +1,6 @@
+{"books":[
+{"title": "Pale Rider: The Spanish Flu of 1918 and How It Changed the World", "author": ["Laura Spinney"], "year": 2017, "subject": "1918 Influenza Pandemic", "hardcoverprice": 28.00,  "audiobookprice": 29.65},
+{"title": "The Fever: How Malaria Has Ruled Humankind for 500,000 Years", "author": ["Sonia Shah"], "year": 2011, "subject":"Malaria", "hardcoverprice": 19.00,  "audiobookprice": 19.95},
+{"title": "Rabid: A Cultural History of the World's Most Diabolical Virus", "author": ["Bill Wasik", "Monica Murphy"], "year": 2012, "subject":"Rabies", "hardcoverprice": 25.95 , "audiobookprice": 20.97}
+]
+}

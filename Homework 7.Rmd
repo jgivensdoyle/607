@@ -1,0 +1,116 @@
+---
+title: "Homework 7"
+author: "Jason Givens-Doyle"
+date: "October 12, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(xml2)
+library(jsonlite)
+library(XML)
+```
+
+For this assignment, I loaded the xml file first.  As I stated in the comments, I made some mistakes when trying to use the XML package (I tried to use xmlTreeParse, which contains a depreciated command that gives R conniptions) and after some trouble, decided to try the xml2 package instead.  I don't know if I made more or less work for myself this way, although I will note that xml2 has an emphasis on lists that XML does not.
+
+```{r}
+#I ran into trouble with the XML package because of a misunderanding on my part.  Now that I get it, I could probably do this in an easier manner, but I'm glad to know the syntax behind the xml2 package, so I'm keeping it using that
+xbooks2<-read_xml("books.xml") #reading in the .xml file
+xml_parent(xbooks2) #this is the structure the xml2 package reads the fine in as.
+xml_children(xbooks2) #the children nods
+xml_children(xbooks2)[[1]] #the structure of a child node
+as.list(xbooks2) #the xml2 package emphasises turning xml nodes into lists  This is the list for the root node, I turn the child nodes into lists below
+kid21<-xml_children(xbooks2)[[1]]
+kid2list1<-as_list(kid21)
+kid22<-xml_children(xbooks2)[[2]]
+kid2list2<-as_list(kid22)
+kid23<-xml_children(xbooks2)[[3]]
+kid2list3<-as_list(kid23)
+#creating lists to turn into dfs to create the master df.  however, this does not deal with author, which I decided to make an attribute, rather than a a value
+```
+
+Due to the above mentioned inclusion of author as an attribute, I had to handle it differently than the other elements.  xml2 has the xml_attrs command, which gives all the attributes of a given xml node.  Before getting the attributes, I turned the lists into data.frames and merged them so I could work with them later.  I also ended up creating the attributes vector two separate ways, given that when running the commands from withing RStudio made me think that the lists were being represented as "\<chr [2]\>" instead of their actual value.  The comments in the code document my intial success that I thought was a failure, my attempts to use rbind to insert a two element AsIs list into a data.frame and then both my recreation of my initial work that kept the author attribute elements as lists and my work turning it into a character vector.  As stated in the comments, I thought it would be a good idea to attempt to keep the authors as lists, as it meant that if needed, one or both authors could be pulled, without needing to parse the string with regular expressions.
+
+```{r}
+#making the dfs
+kiddf1<-as.data.frame(unlist(kid2list1))
+kiddf2<-as.data.frame(unlist(kid2list2))
+kiddf3<-as.data.frame(unlist(kid2list3))
+#combining them
+kidsdf<-cbind(kiddf1,kiddf2,kiddf3)
+#now we just need the authors  We can get them into a list by the following method:
+ta<-xml_attrs(xml_children(xml_children(xbooks2))) #ta for "the authors"
+shortta<-ta[lapply(ta,length)>0] #all of ther other ones did not have attributes, so they were lenght 0
+#to deal with the fact that one of the elements of this has a lenght of 2, I'm going to use the I() function to tell a data.frame to accept something it should not like
+#author<-data.frame(I(c(""))) #1x1 empty data.frame to cbind 1x1 vectors onto.  not the neatest, but it will give me something to rbind onto kidsdf for the final data.frame
+#the above doesn't work, since the AsIs formatting is lost with the transpose function.   To create a data.frame with an AsIs column, I'm going to initialize the author data.frame with the first value from the list, then work from the second value downward
+#I know I could just turn these into characters, but I like the idea of being able to call each author of a book without resorting to regex
+```
+
+This was my initial plan, keeping the author vector as a vector of lists via the I() function.  Oddly enough, if I remove an element from the vector after transposing it, it turns itself into a list.  I cannot figure out why that is, but it's the reason for putting author<-author[,-1] before the transpose instead of author<-author[-1,] after the transpose.
+
+```{r}
+author<-data.frame(c("")) #empty data.frame, 1x1.  going to get rid of this initial one later.  I build it by adding columns with the list elements of shortta kept using the I() function, add it to the kidsdf data.frame and transpose.  the run function inside rstudio makes it look like the list elements of a data.table are simply shown as <chr [1]> or <chr [2]>, but the knit output file actually puts out a nice version.  Because I did it both with the AsIs lists in the data.frame and after pasting them together with a loop, I'm including both versions here, in part to show what I did, in part for future reference for any other web scraping projects/xml interpretation
+#separate section to redo my work with the AsIs elements in the data.frame
+for(i in 1:length(shortta)){
+  author<-cbind(author,I(shortta[i]))
+}
+author<-author[,-1] #get rid of the initialization, if done after the transpose, author turns itself into a list for some reason
+author<-as.data.frame(t(author))
+xml.books.df.first<-as.data.frame(t(cbind(as.data.frame(t(kidsdf)),author))) #need the repeated as.data.frame, as t() turns things into matrices, which mess up the lists
+xml.books.df.first<-as.data.frame(t(xml.books.df.first))
+names(xml.books.df.first)[6]<-"author(s)"
+rownames(xml.books.df.first)<-c("book 1","book 2","book 3")
+xml.books.df.first
+#oddly enough, ever element of this data.frame has been turned into a list
+```
+
+I was initially convinced that the output html file would just give the lenght of the lists in the data.frame instead of their elements, so I decided to turn the author attributes into a single character string for each book.  In both this and the above code, I used a loop instead of sapply because of the nesting of functions taking multiple values.  Interestingly, the t() function somehow makes the names() function cease working with the new data.frame.  This is why I ended up using the colnames function.
+
+```{r}
+#so, we turn everything into boring character strings and work from there
+#I was trying author<-rbind(author,I(shortta[3])) and getting two rows added to author, not one with a forced AsIs, like I would with a cbind.  I found lots of new and interesting ways to break this while attempting to get data.frames to do things they're not supposed to do
+
+author2<-data.frame(paste(unlist(shortta[1]),collapse = ", "))
+for(i in 2:length(shortta)){#it's only 3, but I'd rather write a generality than hard code anything like that in
+  author2<-cbind(author2,data.frame(paste(unlist(shortta[i]),collapse = ", ")))
+}
+xml.book.df<-cbind(t(kidsdf),t(author2))
+rownames(xml.book.df)<-c("book 1","book 2","book 3")
+colnames(xml.book.df)[6] <- "author(s)" #for some reason, the names() function breaks really hard with the transpose function.  thus the use of colnames
+xml.book.df
+```
+
+Next I tackled the .json file.  Both this one and the .html file went much smoother than the .xml file.  The comment about showing the data.frame element as a list with two character elements is the same problem that I thought I was observing above.  Here, because everything was essentially in the same format and I didn't need to contend with some values being attributes, I was able to simply use the sapply function.  At the end, the two versions of the data.frame look the same, even if the elements within them would be handled differently.  After writing out this code, I did an initial knit to see what the final html document would look like, which is when I realized that I did not need to transform the lists into character strings.
+
+```{r}
+#this is so easy compared to the fight with the xml document, it feels unfair
+jsonl.books<-fromJSON("books.json")
+json.books<-jsonl.books[[1]] #despite it dropping everything beautifully into a data.frame, it insistsed on a list
+json.books
+#despite giving a beautifully AsIs list of two characters in the author column when shown in the console, in markdown it just shows that it's a list of two character elements.  So, we need to fix that.  
+#the above is not true, that's just was RStudio wants you to think
+json.books[,2]<-sapply(json.books[,2],function(x) paste(unlist(x), collapse = ", "))
+json.books
+```
+
+Working on the .html file is where I realized that I was mistaken in using xmlTreeParse and should have just been using xmlParse.  The xml2 package does not have the nice html list and table handling functions that XML package does.  Using that, this was easy to write, especially given that the authors were automatically stored as a character string.  If I had wanted to differentiate the two authors for the third book, I would have needed to use str_split to turn them into a list.  On the other hand, the data.frame that readHTMLTable created was all factors, which I needed to fix to use the first row as the column names.  After taking care of that, this data frame was set.
+
+```{r}
+htBooks<-htmlParse("Books.html")
+htBooksL<-readHTMLTable(htBooks)#gives us a list with a single element, consisting of a data.frame.  Also, as it read the author(s) column as a whole, I don't need to worry about the names this time
+htBookstb<-htBooksL[[1]]
+htBookstb #for extra kicks, these are all factors.  Time to fix that, otherwise it will give me a hard time when I try to change the names()
+htBookstb2<-apply(htBookstb, 2, as.character)
+htBookstb2<-as.data.frame(htBookstb2,stringsAsFactors = FALSE)
+htBookstb2
+names(htBookstb2)<-htBookstb2[1,]
+htBookstb2<-htBookstb2[-1,]
+htBookstb2
+```
+
+Given the above work with both lists and character vectors, the three data.frames could be nearly identical, with an exception of the order of listing details about the book and the spacer between authors (and vs ,) or the .json and .xml data.frames could be distinct from the .html data.frame due to the inclusion of lists in those data.frames, which the .html file did not have.
