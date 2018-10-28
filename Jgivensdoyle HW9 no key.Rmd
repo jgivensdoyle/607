@@ -1,0 +1,58 @@
+---
+title: "DATA 607 Week 9 Homework"
+author: "Jason Givens-Doyle"
+date: "October 28, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(httr)
+library(jsonlite)
+
+```
+
+```{r, include=FALSE}
+qlist<-list(`api-key` = "", q="smoking",`begin_date`="20010101",`end_date`="20010830")
+```
+
+For this I chose to look up all articles related to smoking from January 1, 2001 to August 30, 2001.  I have hidden the r code with the key in the html file and included a copy with a blank key in github.  The information is contained in the list qlist, along with the search query.  I loaded the results into the **smoke** variable.
+
+```{r}
+smoke<-GET("https://api.nytimes.com/svc/search/v2/articlesearch.json", query=qlist)
+smoke$status_code #200 means it is there
+head(smoke$content) #verifying the raw bits
+smoke$cookies #unlike the webiste, the API does not serve cookies to inquiries.
+```
+
+To look at **smoke**, we can either load it as a list to examine or put it as a text file to then run through jsonlite.  First as a list, only looking at one of the entries.
+
+```{r}
+smokel<-content(smoke)
+smokel[[3]][[1]][1]
+```
+
+While this could be turned into a data.frame via a lapply command or loop, there is an easier way, as the content of smoke is a json file.  
+
+```{r}
+smoke$headers$`content-type`
+```
+
+So, we use the content function with the "text" argument to get a text file that is essentially a json file already loaded.  I first look at the 200 beginning characters for the example, then run the text through the fromJSON function.  The from JSON function returns a list of data.frames, but I am only interested in the docs portion.   
+
+```{r}
+smoket<-content(smoke,"text")
+substr(smoket,1,200)
+smokedf<-fromJSON(smoket,simplifyDataFrame = TRUE)$response$docs
+head(smokedf)
+```
+
+Interestingly enough, smokedf, while a data.frame, has lists as elements, as JSONlite will do when it receives more than one entry for an element.  Thus, we receive an error for the summary function, even though smokedf is a data.frame.  The offending columns are the keywords and the multimedia columns.  
+
+```{r error=TRUE}
+class(smokedf)
+summary(smokedf)
+class(smokedf$keywords)
+class(smokedf$multimedia)
+```
+
