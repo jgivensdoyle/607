@@ -1,0 +1,44 @@
+---
+title: "DATA 607 Week 12 Assignment"
+author: "Jason Givens-Doyle"
+date: "November 26, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Loading data in MongoDB is very straightforward.  However, making that data easily and quickly usable can be tricky.  
+
+We first connect to to local MongoDB server.  mongolite automatically connects to the localhost by default.  We also load the flights dataframe.
+
+```{r}
+library(mongolite)
+library(nycflights13)
+fl1<-mongo(collection="nycflights13")
+```
+
+We are automatically connected to the test database, if we want to connect to another we can use url="mongodb://localhost/<db_name>".  I have titled the Mongo collection nycflights13.  Right now, however, it is empty, so we put the flights dataframe into it.
+
+```{r}
+fl1$count('{}')
+pt<-proc.time()
+fl1$insert(flights)
+fl1$count('{}')
+proc.time()-pt
+```
+
+This takes much longer than a .csv file or from a sql database.  Searching it similarly takes some time, as the only thing indexed initially is the _id.  We can index another aspect, but that takes time in its own right.  Due to the size of the limits, the extended search time is harder to notice.  However, without them, it would be imposible to find anything in the giant list of flights.
+
+```{r}
+pt<-proc.time()
+fl1$find('{"dep_delay":-1}',limit=80)
+proc.time()-pt
+fl1$index(add='{"dep_delay":-1}')
+pt<-proc.time()
+fl1$find('{"dep_delay":-1}',limit = 80)
+proc.time()-pt
+```
+
+Mongo seems ill suited for something like the flights database, where we are keeping track of uniform information that can easily be stored as a table.  Given that each document in the database is an individual BSON item, it is best used for data that is not uniform and has much more varied items in its structure.
